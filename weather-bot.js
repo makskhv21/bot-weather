@@ -13,6 +13,16 @@ const bot = new Telegraf(BOT_TOKEN);
 const users = {};
 bot.use(session());
 
+async function getCityByCoordinates(latitude, longitude) {
+    const apiUrl = `https://api.openweathermap.org/data/2.5/weather?lat=${latitude}&lon=${longitude}&appid=${OPENWEATHERMAP_API_KEY}`;
+    try {
+        const res = await axios.get(apiUrl);
+        const city = res.data.name;
+        return city;
+    } catch (err) {
+        throw new Error('Не вдалося визначити місто за геолокацією.');
+    }
+}
 // Функція для отримання даних погоди
 async function getWeather(city) {
     const apiUrl = `https://api.openweathermap.org/data/2.5/forecast?q=${city}&appid=${OPENWEATHERMAP_API_KEY}&units=metric`;
@@ -48,9 +58,11 @@ function parseWeatherForecast(weatherData, days) {
 
             return `⏰ *${timeOfDay}* - ${temp}, 🌬 ${windSpeed}, 💧 ${humidity}%`;
         }).join('\n');
+
         return `*${formattedDate}*:\n${formattedTemperatures}`;
     }).join('\n\n');
 }
+
 
 function formatCityWeatherMessage(city, weatherData, forecastType) {
     const forecast = forecastType === 'today' ? parseWeatherForecast(weatherData, 1) : parseWeatherForecast(weatherData, 7);
@@ -60,9 +72,11 @@ function formatCityWeatherMessage(city, weatherData, forecastType) {
 function formatTemperature(temperature) {
     return isNaN(temperature) ? '*' : `${temperature.toFixed(1)}°C`;
 }
+
 function formatWindSpeed(windSpeed) {
     return `${windSpeed.toFixed(1)} м/с`;
 }
+
 function formatHumidity(humidity) {
     return `${humidity.toFixed(0)}`;
 }
@@ -71,10 +85,11 @@ function formatHumidity(humidity) {
 const KeyboardOptions = {
     TODAY: 'Дізнатись погоду',
     ADD_CITY: 'Додати місто',
+    USE_LOCATION: 'Використати геолокацію',
 };
 
 function getMainKeyboard() {
-    return Markup.keyboard([KeyboardOptions.TODAY, KeyboardOptions.ADD_CITY]).resize();
+    return Markup.keyboard([KeyboardOptions.TODAY, KeyboardOptions.ADD_CITY, KeyboardOptions.USE_LOCATION]).resize();
 }
 
 // Клавіатура для вибору міст
@@ -127,6 +142,21 @@ bot.on('message', async (ctx) => {
     if (ctx.message.text === KeyboardOptions.ADD_CITY) {
         ctx.reply('Введіть назву міста:');
         ctx.session.stage = 'add_city';
+    }
+    if (ctx.message.text === KeyboardOptions.USE_LOCATION) {
+        ctx.reply('Надішліть свою геолокацію, щоб дізнатися погоду на сьогодні.');
+    }
+    // Якщо користувач надіслав геолокацію
+    if (ctx.message.location) {
+        const { latitude, longitude } = ctx.message.location;
+        try {
+            const city = await getCityByCoordinates(latitude, longitude);
+            const weatherData = await getWeather(city);
+            const weatherMessage = formatCityWeatherMessage(city, weatherData, 'today');
+            ctx.reply(weatherMessage, getMainKeyboard());
+        } catch (error) {
+            ctx.reply('❌ Не вдалося визначити місто за геолокацією.');
+        }
     }
 });
 
