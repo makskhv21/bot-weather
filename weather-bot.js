@@ -34,3 +34,27 @@ function getMainKeyboard() {
 bot.command('start', (ctx) => {
     ctx.reply('Привіт! Я погодний бот.');
 });
+
+bot.command('addcity', (ctx) => {
+    ctx.reply('Введіть назву міста:');
+    ctx.session.stage = 'add_city';
+})
+bot.on('text', async (ctx) => {
+    if (ctx.session.stage === 'add_city') {
+        const city = ctx.message.text.trim();
+        try {
+            await getWeather(city);
+            const userId = ctx.message.from.id;
+            if(!users[userId]) users[userId] = {cities: [] };
+            users[userId].cities.push(city);
+            ctx.reply(`Місто "${city}" додано!`, getMainKeyboard());
+            ctx.session.stage = undefined;
+        } catch (error) {
+            ctx.reply(`Місто "${city}" не знайдено. Спробуйте ще раз.`);
+        }
+    }
+})
+
+bot.launch()
+  .then(() => console.log('Бот запущений'))
+  .catch((err) => console.error('Помилка запуску:', err));
