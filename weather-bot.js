@@ -13,6 +13,7 @@ const bot = new Telegraf(BOT_TOKEN);
 const users = {};
 bot.use(session());
 
+// Функція для отримання даних погоди
 async function getWeather(city) {
     const apiUrl = `https://api.openweathermap.org/data/2.5/forecast?q=${city}&appid=${OPENWEATHERMAP_API_KEY}&units=metric`;
     try {
@@ -23,9 +24,9 @@ async function getWeather(city) {
     }
 }
 
-function parseWeatherForecast(weatherData) {
+// Функція для парсингу прогнозу
+function parseWeatherForecast(weatherData, days) {
     const forecasts = weatherData.list;
-
     const forecastsByDate = forecasts.reduce((acc, forecast) => {
         const date = moment.unix(forecast.dt).format('DD.MM.YY');
         if (!acc[date]) {
@@ -35,49 +36,22 @@ function parseWeatherForecast(weatherData) {
         return acc;
     }, {});
 
-    const temperaturesByDay = Object.entries(forecastsByDate).map(([date, forecasts]) => {
-        const morningForecasts = forecasts.filter((forecast) => isMorning(forecast));
-        const dayForecasts = forecasts.filter((forecast) => isDay(forecast));
-        const eveningForecasts = forecasts.filter((forecast) => isEvening(forecast));
+    const forecastEntries = Object.entries(forecastsByDate);
+    const selectedForecasts = days === 1 ? [forecastEntries[0]] : forecastEntries.slice(0, 7);
 
-        const averageMorningTemperature = calculateAverageTemperature(morningForecasts);
-        const averageDayTemperature = calculateAverageTemperature(dayForecasts);
-        const averageEveningTemperature = calculateAverageTemperature(eveningForecasts);
-
+    return selectedForecasts.map(([date, forecasts]) => {
         const dayOfWeek = moment(date, 'DD.MM.YY').format('dddd');
-
-        const formattedTemperatures = [
-            `Ранок: ${formatTemperature(averageMorningTemperature)}`,
-            `День: ${formatTemperature(averageDayTemperature)}`,
-            `Вечір: ${formatTemperature(averageEveningTemperature)}`,
-        ].filter(Boolean).join(', ');
+        const formattedTemperatures = forecasts.map(forecast => {
+            const timeOfDay = moment.unix(forecast.dt).format('HH:mm');
+            const temp = formatTemperature(forecast.main.temp);
+            return `${timeOfDay}: ${temp}`;
+        }).join(', ');
 
         return `${date} (${translateDayOfWeek(dayOfWeek)}): ${formattedTemperatures}`;
-    });
-
-    return temperaturesByDay.join('\n');
+    }).join('\n');
 }
 
-function isMorning(forecast) {
-    const hour = moment.unix(forecast.dt).hour();
-    return hour >= 6 && hour < 12;
-}
-
-function isDay(forecast) {
-    const hour = moment.unix(forecast.dt).hour();
-    return hour >= 12 && hour < 18;
-}
-
-function isEvening(forecast) {
-    const hour = moment.unix(forecast.dt).hour();
-    return hour >= 18 && hour < 24;
-}
-
-function calculateAverageTemperature(forecasts) {
-    const temperatures = forecasts.map((forecast) => forecast.main.temp);
-    return temperatures.reduce((sum, temp) => sum + temp, 0) / temperatures.length;
-}
-
+// Переклад днів тижня
 function translateDayOfWeek(dayOfWeek) {
     const translations = {
         Monday: 'Пн',
@@ -92,37 +66,44 @@ function translateDayOfWeek(dayOfWeek) {
     return translations[dayOfWeek] || dayOfWeek;
 }
 
+// Форматування температури
 function formatTemperature(temperature) {
     return isNaN(temperature) ? '-' : `${temperature.toFixed(2)}°C`;
 }
 
+// Кнопки для головного меню
 const KeyboardOptions = {
-    WEATHER: 'Дізнатись погоду',
+    TODAY: 'Дізнатись погоду',
     ADD_CITY: 'Додати місто',
 };
 
 function getMainKeyboard() {
-    return Markup.keyboard([KeyboardOptions.WEATHER, KeyboardOptions.ADD_CITY]).resize();
+    return Markup.keyboard([KeyboardOptions.TODAY, KeyboardOptions.ADD_CITY]).resize();
 }
 
+// Клавіатура для вибору міст
 function getCityKeyboard(userId) {
     const cities = users[userId]?.cities || [];
     const cityButtons = cities.map((city) => [
-        Markup.button.callback(city, `city_${city}`),
-        Markup.button.callback(`Видалити ${city}`, `remove_${city}`),
+        Markup.button.callback(city, `city_${city}_today`),
+        Markup.button.callback(`На тиждень`, `city_${city}_seven`),
+        Markup.button.callback(`Видалити`, `remove_${city}`),
     ]);
     return Markup.inlineKeyboard(cityButtons);
 }
 
+// Команда /start
 bot.command('start', (ctx) => {
     ctx.reply('Привіт! Я погодний бот.', getMainKeyboard());
 });
 
+// Команда /addcity
 bot.command('addcity', (ctx) => {
     ctx.reply('Введіть назву міста:');
     ctx.session.stage = 'add_city';
 });
 
+// Обробка введення міста
 bot.on('message', async (ctx) => {
     const userId = ctx.message.from.id;
 
@@ -143,7 +124,7 @@ bot.on('message', async (ctx) => {
         }
     }
 
-    if (ctx.message.text === KeyboardOptions.WEATHER && users[userId]?.cities.length) {
+    if (ctx.message.text === KeyboardOptions.TODAY && users[userId]?.cities.length) {
         ctx.reply('Оберіть місто:', getCityKeyboard(userId));
     }
 
@@ -153,22 +134,37 @@ bot.on('message', async (ctx) => {
     }
 });
 
-bot.action(/^city_(.+)$/, async (ctx) => {
+// Обробка кнопки "Прогноз на сьогодні"
+bot.action(/^city_(.+)_today$/, async (ctx) => {
+    const city = ctx.match[1];
+    const userId = ctx.from.id;
+    try {
+        const weatherData = await getWeather(city);
+        const weatherMessage = `${city} (сьогодні):\n${parseWeatherForecast(weatherData, 1)}`;
+        ctx.reply(weatherMessage, getCityKeyboard(userId));
+    } catch (error) {
+        ctx.reply('Не вдалося отримати погодні дані для цього міста.');
+    }
+});
+// Обробка кнопки "Прогноз на тиждень"
+bot.action(/^city_(.+)_seven$/, async (ctx) => {
     const city = ctx.match[1];
     const userId = ctx.from.id;
 
     try {
         const weatherData = await getWeather(city);
-        const weatherMessage = `${city}:\n${parseWeatherForecast(weatherData)}`;
+        const weatherMessage = `${city} (на тиждень):\n${parseWeatherForecast(weatherData, 7)}`;
         ctx.reply(weatherMessage, getCityKeyboard(userId));
     } catch (error) {
         ctx.reply('Не вдалося отримати погодні дані для цього міста.');
     }
 });
 
+// Обробка видалення міста
 bot.action(/^remove_(.+)$/, (ctx) => {
     const city = ctx.match[1];
     const userId = ctx.from.id;
+
     if (users[userId]) {
         users[userId].cities = users[userId].cities.filter((item) => item !== city);
         ctx.reply(`Місто "${city}" видалено зі списку.`, getCityKeyboard(userId));
@@ -176,6 +172,7 @@ bot.action(/^remove_(.+)$/, (ctx) => {
         ctx.reply('Щось пішло не так. Спробуйте ще раз.');
     }
 });
+
 bot.launch()
     .then(() => console.log('Бот запущений'))
     .catch((err) => console.error('Помилка запуску:', err));
