@@ -16,6 +16,7 @@ const KeyboardOptions = {
     TODAY: 'Дізнатись погоду',
     ADD_CITY: 'Додати місто',
     USE_LOCATION: 'Використати геолокацію',
+    USE_REMIND: 'Сповіщення',
 };
 
 const NotificationKeyboardOptions = {
@@ -28,7 +29,8 @@ function getMainKeyboard() {
     return Markup.keyboard([
         KeyboardOptions.TODAY, 
         KeyboardOptions.ADD_CITY, 
-        KeyboardOptions.USE_LOCATION
+        KeyboardOptions.USE_LOCATION,
+        KeyboardOptions.USE_REMIND,
     ]).resize();
 };
 
@@ -127,6 +129,10 @@ bot.hears(NotificationKeyboardOptions.REMOVE_NOTIFICATION, (ctx) => {
 
 bot.hears(NotificationKeyboardOptions.BACK_TO_MAIN_MENU, (ctx) => {
     ctx.reply('Ви повернулись в головне меню.', getMainKeyboard());  
+});
+
+bot.hears(KeyboardOptions.USE_REMIND, (ctx) => {
+    ctx.reply('Меню налаштування сповіщень:', getNotificationKeyboard());
 });
 
 bot.on('message', async (ctx) => {
