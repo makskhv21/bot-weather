@@ -89,13 +89,13 @@ describe('Telegram Bot tests', () => {
             const time = ctx.message.text.trim();
             const timeRegex = /^([01]?[0-9]|2[0-3]):([0-5][0-9])$/;
             if (timeRegex.test(time)) {
-                ctx.reply(`Час сповіщення встановлено на ${time}`);
+                ctx.reply(`Час нагадування встановлено на ${time}`);
             } else {
                 ctx.reply('❌ Невірний формат часу. Спробуйте ще раз.');
             }
         });
 
-        expect(mockReply).toHaveBeenCalledWith('Час сповіщення встановлено на 08:30');
+        expect(mockReply).toHaveBeenCalledWith('Час нагадування встановлено на 08:30');
     });
 
     it('should handle the /help command', async () => {
