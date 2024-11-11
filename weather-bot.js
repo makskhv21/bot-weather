@@ -13,6 +13,7 @@ const bot = new Telegraf(BOT_TOKEN);
 const users = {};
 bot.use(session());
 
+
 async function getCityByCoordinates(latitude, longitude) {
     const apiUrl = `https://api.openweathermap.org/data/2.5/weather?lat=${latitude}&lon=${longitude}&appid=${OPENWEATHERMAP_API_KEY}`;
     try {
@@ -23,6 +24,8 @@ async function getCityByCoordinates(latitude, longitude) {
         throw new Error('Не вдалося визначити місто за геолокацією.');
     }
 }
+
+
 // Функція для отримання даних погоди
 async function getWeather(city) {
     const apiUrl = `https://api.openweathermap.org/data/2.5/forecast?q=${city}&appid=${OPENWEATHERMAP_API_KEY}&units=metric`;
@@ -99,10 +102,18 @@ function getCityKeyboard(userId) {
         Markup.button.callback(city, `city_${city}_today`),
         Markup.button.callback(`На тиждень`, `city_${city}_seven`),
         Markup.button.callback(`Видалити`, `remove_${city}`),
+        Markup.button.callback(`Поділитись прогнозом`, `share_${city}`)
     ]);
     return Markup.inlineKeyboard(cityButtons);
 }
 
+function generateWeatherShareLink(city, weatherData, forecastType) {
+    const forecast = forecastType === 'today' ? parseWeatherForecast(weatherData, 1) : parseWeatherForecast(weatherData, 7);
+    const message = `🌍 *Погода в місті ${city}:*\n\n${forecast}\n\n☀️ Залишайтесь на зв'язку з нашим ботом для отримання актуальної інформації!`;
+    const encodedMessage = encodeURIComponent(message);  // Кодуємо повідомлення
+    const url = `https://t.me/share/url?url=${encodedMessage}`;  // Створюємо посилання для поділу
+    return url;
+}
 // Команда /start
 bot.command('start', (ctx) => {
     ctx.reply('Привіт! Я погодний бот.', getMainKeyboard());
@@ -143,9 +154,11 @@ bot.on('message', async (ctx) => {
         ctx.reply('Введіть назву міста:');
         ctx.session.stage = 'add_city';
     }
+
     if (ctx.message.text === KeyboardOptions.USE_LOCATION) {
         ctx.reply('Надішліть свою геолокацію, щоб дізнатися погоду на сьогодні.');
     }
+
     // Якщо користувач надіслав геолокацію
     if (ctx.message.location) {
         const { latitude, longitude } = ctx.message.location;
@@ -158,6 +171,7 @@ bot.on('message', async (ctx) => {
             ctx.reply('❌ Не вдалося визначити місто за геолокацією.');
         }
     }
+
 });
 
 // Обробка кнопки "Прогноз на сьогодні"
@@ -199,6 +213,18 @@ bot.action(/^remove_(.+)$/, (ctx) => {
     }
 });
 
+bot.action(/^share_(.+)$/, async (ctx) => {
+    const city = ctx.match[1];
+    const userId = ctx.from.id;
+    try {
+        const weatherData = await getWeather(city);
+        const weatherMessage = formatCityWeatherMessage(city, weatherData, 'today');  // Отримуємо прогноз на сьогодні
+        const shareLink = generateWeatherShareLink(city, weatherData, 'today');  // Генеруємо посилання для поділу
+        ctx.reply(`Ось ваш прогноз для міста ${city}:\n${weatherMessage}\n\nПоділіться ним за посиланням: ${shareLink}`, getCityKeyboard(userId));
+    } catch (error) {
+        ctx.reply('❌ Не вдалося отримати погодні дані для цього міста.');
+    }
+});
 bot.launch()
     .then(() => console.log('Бот запущений'))
     .catch((err) => console.error('Помилка запуску:', err));
