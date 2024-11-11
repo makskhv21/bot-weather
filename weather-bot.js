@@ -38,8 +38,9 @@ bot.command('start', (ctx) => {
 bot.command('addcity', (ctx) => {
     ctx.reply('Введіть назву міста:');
     ctx.session.stage = 'add_city';
-})
-bot.on('text', async (ctx) => {
+});
+
+bot.on('message', async (ctx) => {
     if (ctx.session.stage === 'add_city') {
         const city = ctx.message.text.trim();
         try {
@@ -53,7 +54,19 @@ bot.on('text', async (ctx) => {
             ctx.reply(`Місто "${city}" не знайдено. Спробуйте ще раз.`);
         }
     }
-})
+});
+
+bot.on('message', async (ctx) => {
+    const userId = ctx.message.from.id;
+    if (ctx.message.text === KeyboardOptions.WEATHER && users[userId]?.cities.length) {
+      const weatherPromises = users[userId].cities.map(getWeather);
+      const weatherResults = await Promise.all(weatherPromises);
+      const weatherMessage = weatherResults
+        .map((data, index) => `${users[userId].cities[index]}:\n${JSON.stringify(data)}`)
+        .join('\n\n');
+      ctx.reply(weatherMessage, getMainKeyboard());
+    }
+});
 
 bot.launch()
   .then(() => console.log('Бот запущений'))
