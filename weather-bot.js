@@ -107,9 +107,13 @@ function getMainKeyboard() {
 
 function getCityKeyboard(userId) {
     const cities = users[userId]?.cities || [];
-    const cityButtons = cities.map((city) => Markup.button.callback(city, `city_${city}`));
+    const cityButtons = cities.map((city) => [
+        Markup.button.callback(city, `city_${city}`),
+        Markup.button.callback(`Видалити ${city}`, `remove_${city}`),
+    ]);
     return Markup.inlineKeyboard(cityButtons);
 }
+
 bot.command('start', (ctx) => {
     ctx.reply('Привіт! Я погодний бот.', getMainKeyboard());
 });
@@ -152,12 +156,24 @@ bot.on('message', async (ctx) => {
 bot.action(/^city_(.+)$/, async (ctx) => {
     const city = ctx.match[1];
     const userId = ctx.from.id;
+
     try {
         const weatherData = await getWeather(city);
         const weatherMessage = `${city}:\n${parseWeatherForecast(weatherData)}`;
         ctx.reply(weatherMessage, getCityKeyboard(userId));
     } catch (error) {
         ctx.reply('Не вдалося отримати погодні дані для цього міста.');
+    }
+});
+
+bot.action(/^remove_(.+)$/, (ctx) => {
+    const city = ctx.match[1];
+    const userId = ctx.from.id;
+    if (users[userId]) {
+        users[userId].cities = users[userId].cities.filter((item) => item !== city);
+        ctx.reply(`Місто "${city}" видалено зі списку.`, getCityKeyboard(userId));
+    } else {
+        ctx.reply('Щось пішло не так. Спробуйте ще раз.');
     }
 });
 bot.launch()
