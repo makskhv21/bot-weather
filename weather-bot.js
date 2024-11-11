@@ -25,6 +25,7 @@ async function getWeather(city) {
 
 function parseWeatherForecast(weatherData) {
     const forecasts = weatherData.list;
+
     const forecastsByDate = forecasts.reduce((acc, forecast) => {
         const date = moment.unix(forecast.dt).format('DD.MM.YY');
         if (!acc[date]) {
@@ -33,21 +34,27 @@ function parseWeatherForecast(weatherData) {
         acc[date].push(forecast);
         return acc;
     }, {});
+
     const temperaturesByDay = Object.entries(forecastsByDate).map(([date, forecasts]) => {
         const morningForecasts = forecasts.filter((forecast) => isMorning(forecast));
         const dayForecasts = forecasts.filter((forecast) => isDay(forecast));
         const eveningForecasts = forecasts.filter((forecast) => isEvening(forecast));
+
         const averageMorningTemperature = calculateAverageTemperature(morningForecasts);
         const averageDayTemperature = calculateAverageTemperature(dayForecasts);
         const averageEveningTemperature = calculateAverageTemperature(eveningForecasts);
+
         const dayOfWeek = moment(date, 'DD.MM.YY').format('dddd');
+
         const formattedTemperatures = [
             `Ранок: ${formatTemperature(averageMorningTemperature)}`,
             `День: ${formatTemperature(averageDayTemperature)}`,
             `Вечір: ${formatTemperature(averageEveningTemperature)}`,
         ].filter(Boolean).join(', ');
+
         return `${date} (${translateDayOfWeek(dayOfWeek)}): ${formattedTemperatures}`;
     });
+
     return temperaturesByDay.join('\n');
 }
 
@@ -55,10 +62,12 @@ function isMorning(forecast) {
     const hour = moment.unix(forecast.dt).hour();
     return hour >= 6 && hour < 12;
 }
+
 function isDay(forecast) {
     const hour = moment.unix(forecast.dt).hour();
     return hour >= 12 && hour < 18;
 }
+
 function isEvening(forecast) {
     const hour = moment.unix(forecast.dt).hour();
     return hour >= 18 && hour < 24;
@@ -79,12 +88,14 @@ function translateDayOfWeek(dayOfWeek) {
         Saturday: 'Сб',
         Sunday: 'Вс',
     };
+
     return translations[dayOfWeek] || dayOfWeek;
 }
 
 function formatTemperature(temperature) {
     return isNaN(temperature) ? '-' : `${temperature.toFixed(2)}°C`;
 }
+
 const KeyboardOptions = {
     WEATHER: 'Дізнатись погоду',
     ADD_CITY: 'Додати місто',
@@ -94,6 +105,11 @@ function getMainKeyboard() {
     return Markup.keyboard([KeyboardOptions.WEATHER, KeyboardOptions.ADD_CITY]).resize();
 }
 
+function getCityKeyboard(userId) {
+    const cities = users[userId]?.cities || [];
+    const cityButtons = cities.map((city) => Markup.button.callback(city, `city_${city}`));
+    return Markup.inlineKeyboard(cityButtons);
+}
 bot.command('start', (ctx) => {
     ctx.reply('Привіт! Я погодний бот.', getMainKeyboard());
 });
@@ -105,9 +121,11 @@ bot.command('addcity', (ctx) => {
 
 bot.on('message', async (ctx) => {
     const userId = ctx.message.from.id;
+
     if (!ctx.session) {
         ctx.session = {};
     }
+
     if (ctx.session.stage === 'add_city') {
         const city = ctx.message.text.trim();
         try {
@@ -122,22 +140,26 @@ bot.on('message', async (ctx) => {
     }
 
     if (ctx.message.text === KeyboardOptions.WEATHER && users[userId]?.cities.length) {
-        const weatherPromises = users[userId].cities.map(getWeather);
-        Promise.all(weatherPromises)
-            .then((weatherResults) => {
-                const weatherMessage = weatherResults
-                    .map((data, index) => `${users[userId].cities[index]}:\n${parseWeatherForecast(data)}`)
-                    .join('\n\n');
-                ctx.reply(weatherMessage, getMainKeyboard());
-            })
-            .catch((error) => ctx.reply('Помилка при отриманні погодних даних.'));
+        ctx.reply('Оберіть місто:', getCityKeyboard(userId));
     }
+
     if (ctx.message.text === KeyboardOptions.ADD_CITY) {
         ctx.reply('Введіть назву міста:');
         ctx.session.stage = 'add_city';
     }
 });
 
+bot.action(/^city_(.+)$/, async (ctx) => {
+    const city = ctx.match[1];
+    const userId = ctx.from.id;
+    try {
+        const weatherData = await getWeather(city);
+        const weatherMessage = `${city}:\n${parseWeatherForecast(weatherData)}`;
+        ctx.reply(weatherMessage, getCityKeyboard(userId));
+    } catch (error) {
+        ctx.reply('Не вдалося отримати погодні дані для цього міста.');
+    }
+});
 bot.launch()
     .then(() => console.log('Бот запущений'))
     .catch((err) => console.error('Помилка запуску:', err));
