@@ -21,6 +21,10 @@ async function getWeather(city) {
     }
 }
 
+function formatTemperature(temperature) {
+    return isNaN(temperature) ? '-' : `${temperature.toFixed(2)}°C`;
+}
+
 // Основні опції клавіатури
 const KeyboardOptions = {
     WEATHER: 'Дізнатись погоду',
