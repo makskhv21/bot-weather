@@ -24,11 +24,10 @@ async function getWeather(city) {
     }
 }
 
-// Функція для парсингу прогнозу
 function parseWeatherForecast(weatherData, days) {
     const forecasts = weatherData.list;
     const forecastsByDate = forecasts.reduce((acc, forecast) => {
-        const date = moment.unix(forecast.dt).format('DD.MM.YY');
+        const date = moment.unix(forecast.dt).format('YYYY-MM-DD');  // Форматуємо дату у форматі "2024-11-10"
         if (!acc[date]) {
             acc[date] = [];
         }
@@ -40,35 +39,32 @@ function parseWeatherForecast(weatherData, days) {
     const selectedForecasts = days === 1 ? [forecastEntries[0]] : forecastEntries.slice(0, 7);
 
     return selectedForecasts.map(([date, forecasts]) => {
-        const dayOfWeek = moment(date, 'DD.MM.YY').format('dddd');
+        const formattedDate = moment(date).format('dddd, D MMMM YYYY');  // Форматована дата, наприклад "Понеділок, 10 Листопада 2024"
         const formattedTemperatures = forecasts.map(forecast => {
             const timeOfDay = moment.unix(forecast.dt).format('HH:mm');
             const temp = formatTemperature(forecast.main.temp);
-            return `${timeOfDay}: ${temp}`;
-        }).join(', ');
+            const windSpeed = formatWindSpeed(forecast.wind.speed);
+            const humidity = formatHumidity(forecast.main.humidity);
 
-        return `${date} (${translateDayOfWeek(dayOfWeek)}): ${formattedTemperatures}`;
-    }).join('\n');
+            return `⏰ *${timeOfDay}* - ${temp}, 🌬 ${windSpeed}, 💧 ${humidity}%`;
+        }).join('\n');
+        return `*${formattedDate}*:\n${formattedTemperatures}`;
+    }).join('\n\n');
 }
 
-// Переклад днів тижня
-function translateDayOfWeek(dayOfWeek) {
-    const translations = {
-        Monday: 'Пн',
-        Tuesday: 'Вт',
-        Wednesday: 'Ср',
-        Thursday: 'Чт',
-        Friday: 'Пт',
-        Saturday: 'Сб',
-        Sunday: 'Вс',
-    };
-
-    return translations[dayOfWeek] || dayOfWeek;
+function formatCityWeatherMessage(city, weatherData, forecastType) {
+    const forecast = forecastType === 'today' ? parseWeatherForecast(weatherData, 1) : parseWeatherForecast(weatherData, 7);
+    return `🌍 *Погода в місті ${city}:*\n\n${forecast}\n\n☀️ Залишайтесь на зв'язку з нашим ботом для отримання актуальної інформації!`;
 }
 
-// Форматування температури
 function formatTemperature(temperature) {
-    return isNaN(temperature) ? '-' : `${temperature.toFixed(2)}°C`;
+    return isNaN(temperature) ? '*' : `${temperature.toFixed(1)}°C`;
+}
+function formatWindSpeed(windSpeed) {
+    return `${windSpeed.toFixed(1)} м/с`;
+}
+function formatHumidity(humidity) {
+    return `${humidity.toFixed(0)}`;
 }
 
 // Кнопки для головного меню
@@ -138,38 +134,38 @@ bot.on('message', async (ctx) => {
 bot.action(/^city_(.+)_today$/, async (ctx) => {
     const city = ctx.match[1];
     const userId = ctx.from.id;
+
     try {
         const weatherData = await getWeather(city);
-        const weatherMessage = `${city} (сьогодні):\n${parseWeatherForecast(weatherData, 1)}`;
+        const weatherMessage = formatCityWeatherMessage(city, weatherData, 'today');
         ctx.reply(weatherMessage, getCityKeyboard(userId));
     } catch (error) {
-        ctx.reply('Не вдалося отримати погодні дані для цього міста.');
+        ctx.reply('❌ Не вдалося отримати погодні дані для цього міста.');
     }
 });
-// Обробка кнопки "Прогноз на тиждень"
+
 bot.action(/^city_(.+)_seven$/, async (ctx) => {
     const city = ctx.match[1];
     const userId = ctx.from.id;
 
     try {
         const weatherData = await getWeather(city);
-        const weatherMessage = `${city} (на тиждень):\n${parseWeatherForecast(weatherData, 7)}`;
+        const weatherMessage = formatCityWeatherMessage(city, weatherData, 'seven');
         ctx.reply(weatherMessage, getCityKeyboard(userId));
     } catch (error) {
-        ctx.reply('Не вдалося отримати погодні дані для цього міста.');
+        ctx.reply('❌ Не вдалося отримати погодні дані для цього міста.');
     }
 });
 
-// Обробка видалення міста
 bot.action(/^remove_(.+)$/, (ctx) => {
     const city = ctx.match[1];
     const userId = ctx.from.id;
 
     if (users[userId]) {
         users[userId].cities = users[userId].cities.filter((item) => item !== city);
-        ctx.reply(`Місто "${city}" видалено зі списку.`, getCityKeyboard(userId));
+        ctx.reply(`🗑 Місто "${city}" видалено зі списку.`, getCityKeyboard(userId));
     } else {
-        ctx.reply('Щось пішло не так. Спробуйте ще раз.');
+        ctx.reply('❌ Щось пішло не так. Спробуйте ще раз.');
     }
 });
 
