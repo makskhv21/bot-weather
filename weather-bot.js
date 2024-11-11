@@ -131,11 +131,36 @@ bot.command('setnotification', (ctx) => {
     ctx.reply('Введіть час сповіщення у форматі HH:mm (наприклад, 08:30):');
     ctx.session.stage = 'set_notification_time';
 });
+// Команда /about
+bot.command('about', (ctx) => {
+    const aboutMessage = `
+    🤖 **Про цього бота:**
+    Я погодний бот, який надає актуальну інформацію про погоду в різних містах.
+    Я можу допомогти дізнатись погоду на сьогодні або на наступні кілька днів.
+    💬 Ви можете додавати міста, використовувати свою геолокацію для визначення погоди та налаштовувати щоденні сповіщення.
+    `;
+    ctx.reply(aboutMessage);
+});
+// Команда /help
+bot.command('help', (ctx) => {
+    const helpMessage = `
+    📘 **Інструкція:**
+    Ось кілька команд, які ви можете використовувати:
+    - /start — Почати роботу з ботом
+    - /about — Дізнатись більше про бота
+    - /help — Отримати допомогу щодо використання бота
+    - /addcity — Додати нове місто для прогнозу погоди
+    - /setnotification — Налаштувати щоденне сповіщення для міста
+    - /remove_notification — Видалити час сповіщення
+    `;
+    ctx.reply(helpMessage);
+});
 const NotificationKeyboardOptions = {
     SET_NOTIFICATION: 'Налаштувати щоденне сповіщення',
     REMOVE_NOTIFICATION: 'Видалити час сповіщення',
     BACK_TO_MAIN_MENU: 'Повернутись в головне меню',
 };
+
 function getNotificationKeyboard() {
     return Markup.keyboard([
         [
@@ -147,9 +172,11 @@ function getNotificationKeyboard() {
         ]
     ]).resize();
 }
+
 bot.hears(NotificationKeyboardOptions.BACK_TO_MAIN_MENU, (ctx) => {
     ctx.reply('Ви повернулись в головне меню.', getMainKeyboard());  
 });
+
 function getCityForNotificationKeyboard(userId) {
     const cities = users[userId]?.cities || [];
     const cityButtons = cities.map((city) => [
@@ -157,6 +184,7 @@ function getCityForNotificationKeyboard(userId) {
     ]);
     return Markup.inlineKeyboard(cityButtons);
 }
+
 // Обробка вибору міста для налаштування сповіщення
 bot.hears(NotificationKeyboardOptions.SET_NOTIFICATION, (ctx) => {
     const userId = ctx.message.from.id;
@@ -166,6 +194,7 @@ bot.hears(NotificationKeyboardOptions.SET_NOTIFICATION, (ctx) => {
         ctx.reply('❌ У вас ще немає міст. Спочатку додайте місто.');
     }
 });
+
 // Обробка введення міста
 bot.on('message', async (ctx) => {
     const userId = ctx.message.from.id;
@@ -215,20 +244,24 @@ bot.on('message', async (ctx) => {
 
     if (ctx.session.stage === 'set_notification_time') {
         const time = ctx.message.text.trim();
+
         const timeRegex = /^([01]?[0-9]|2[0-3]):([0-5][0-9])$/;
         if (timeRegex.test(time)) {
             const city = ctx.session.selectedCityForNotification;
             if (!users[userId]) users[userId] = {};
+
             if (!users[userId].notifications) {
                 users[userId].notifications = {};
             }
             users[userId].notifications[city] = time;
+
             ctx.reply(`Час сповіщення для міста "${city}" встановлено на ${time}.`, getNotificationKeyboard());
             ctx.session.stage = undefined;
         } else {
             ctx.reply('❌ Невірний формат часу. Спробуйте ще раз, використовуючи формат HH:mm (наприклад, 08:30).');
         }
     }
+
     if (ctx.message.text === NotificationKeyboardOptions.REMOVE_NOTIFICATION) {
         if (users[userId]?.notificationTime) {
             delete users[userId].notificationTime;
@@ -238,18 +271,22 @@ bot.on('message', async (ctx) => {
         }
     }
 });
+
 bot.hears(NotificationKeyboardOptions.REMOVE_NOTIFICATION, (ctx) => {
     const userId = ctx.message.from.id;
     const cities = users[userId]?.cities || [];
+
     if (cities.length > 0) {
         ctx.reply('Оберіть місто для видалення часу сповіщення:', getCityForNotificationKeyboard(userId));
     } else {
         ctx.reply('❌ У вас ще немає міст. Спочатку додайте місто.');
     }
 });
+
 bot.action(/^remove_notification_(.+)$/, (ctx) => {
     const city = ctx.match[1];
     const userId = ctx.from.id;
+
     if (users[userId]?.notifications && users[userId].notifications[city]) {
         delete users[userId].notifications[city];
         ctx.reply(`Час сповіщення для міста "${city}" видалено.`, getNotificationKeyboard());
@@ -257,7 +294,7 @@ bot.action(/^remove_notification_(.+)$/, (ctx) => {
         ctx.reply('❌ Немає налаштованого часу сповіщення для цього міста.');
     }
 });
- 
+
 function checkNotifications() {
     setInterval(() => {
         const now = moment().format('HH:mm');  
@@ -265,6 +302,7 @@ function checkNotifications() {
             const notifications = users[userId]?.notifications || {};
             Object.keys(notifications).forEach(city => {
                 if (notifications[city] === now) {
+
                     getWeather(city).then(weatherData => {
                         const weatherMessage = formatCityWeatherMessage(city, weatherData, 'today');
                         bot.telegram.sendMessage(userId, weatherMessage);
@@ -274,14 +312,18 @@ function checkNotifications() {
         });
     }, 60000);  
 }
+
 checkNotifications();
+
 bot.action(/^set_notification_(.+)$/, (ctx) => {
     const city = ctx.match[1];
     const userId = ctx.from.id;
+
     ctx.session.selectedCityForNotification = city;
     ctx.reply(`Вибрано місто: ${city}. Тепер введіть час сповіщення у форматі HH:mm (наприклад, 08:30):`);
     ctx.session.stage = 'set_notification_time';
 });
+
 
 bot.action(/^city_(.+)_today$/, async (ctx) => {
     const city = ctx.match[1];
@@ -337,3 +379,4 @@ bot.action(/^share_(.+)$/, async (ctx) => {
 
 bot.launch()
     .then(() => console.log('Бот запущений'))
+    .catch((err) => console.error('Помилка запуску:', err));
