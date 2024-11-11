@@ -21,6 +21,72 @@ async function getWeather(city) {
     }
 }
 
+function parseWeatherForecast(weatherData) {
+    const forecasts = weatherData.list;
+  
+    const forecastsByDate = forecasts.reduce((acc, forecast) => {
+        const date = moment.unix(forecast.dt).format('DD.MM.YY');
+        if (!acc[date]) {
+            acc[date] = [];
+        }
+        acc[date].push(forecast);
+        return acc;
+    }, {});
+  
+    const temperaturesByDay = Object.entries(forecastsByDate).map(([date, forecasts]) => {
+        const morningForecasts = forecasts.filter((forecast) => isMorning(forecast));
+        const dayForecasts = forecasts.filter((forecast) => isDay(forecast));
+        const eveningForecasts = forecasts.filter((forecast) => isEvening(forecast));
+    
+        const averageMorningTemperature = calculateAverageTemperature(morningForecasts);
+        const averageDayTemperature = calculateAverageTemperature(dayForecasts);
+        const averageEveningTemperature = calculateAverageTemperature(eveningForecasts);
+    
+        const dayOfWeek = moment(date, 'DD.MM.YY').format('dddd');
+    
+        const formattedTemperatures = [
+            `Ранок: ${formatTemperature(averageMorningTemperature)}`,
+            `День: ${formatTemperature(averageDayTemperature)}`,
+            `Вечір: ${formatTemperature(averageEveningTemperature)}`,
+        ].filter(Boolean).join(', ');
+    
+        return `${date} (${translateDayOfWeek(dayOfWeek)}): ${formattedTemperatures}`;
+    });
+  
+    return temperaturesByDay.join('\n');
+}  
+function isMorning(forecast) {
+    const hour = moment.unix(forecast.dt).hour();
+    return hour >= 6 && hour < 12;
+}
+  
+function isDay(forecast) {
+    const hour = moment.unix(forecast.dt).hour();
+    return hour >= 12 && hour < 18;
+}
+  
+function isEvening(forecast) {
+    const hour = moment.unix(forecast.dt).hour();
+    return hour >= 18 && hour < 24;
+}
+function calculateAverageTemperature(forecasts) {
+    const temperatures = forecasts.map((forecast) => forecast.main.temp);
+    return temperatures.reduce((sum, temp) => sum + temp, 0) / temperatures.length;
+}
+function translateDayOfWeek(dayOfWeek) {
+    const translations = {
+        Monday: 'Пн',
+        Tuesday: 'Вт',
+        Wednesday: 'Ср',
+        Thursday: 'Чт',
+        Friday: 'Пт',
+        Saturday: 'Сб',
+        Sunday: 'Вс',
+    };
+  
+    return translations[dayOfWeek] || dayOfWeek;
+}
+
 function formatTemperature(temperature) {
     return isNaN(temperature) ? '-' : `${temperature.toFixed(2)}°C`;
 }
